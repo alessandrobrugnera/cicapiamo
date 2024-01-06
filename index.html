@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Ci Capiamo?</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="flex flex-col justify-center items-center mt-4 bg-black text-white p-4 max-w-lg m-auto">
+	<h1 class="text-4xl rounded bg-red-600 p-2 font-bold text-white">Ci Capiamo?</h1>
+	<div id="step0" class="flex flex-col mt-4 justify-center">
+		<span class="text-center">Step 0: Attendi la connessione al server...</span>
+	</div>
+	<div id="step1" class="hidden flex flex-col mt-4 justify-center">
+		<span class="text-center">Step 1: Scegli se questo dispositivo sarà usato per rispondere o per fare le domande.</span>
+		<div class="flex flex-1 mt-4 items-center justify-center">
+			<input type="button" value="Rispondere" onclick="chooseAnswerDeviceType()" class="p-2 rounded bg-white text-black font-bold mr-1 cursor-pointer uppercase" />
+			<input type="button" value="Fare Domande" onclick="chooseQuestionDeviceType()" class="p-2 rounded bg-white text-black font-bold cursor-pointer uppercase" />
+		</div>
+	</div>
+	<div id="step2a" class="hidden flex flex-col mt-4 justify-center">
+		<span class="text-center">Step 2: Ora devi inserire il codice che ti viene mostrato sul secondo dispositvo.</span>
+		<div class="flex mt-4 items-center justify-center">
+			<span class="font-bold mr-1">Inserisci il codice a 9 cifre:</span>
+			<input type="number" id="code" placeholder="Codice" class="p-2 rounded text-black mr-1" />
+			<input type="button" value="Connettiti" onclick="connectToQuestionDevice()" class="p-2 rounded bg-white text-black font-bold cursor-pointer uppercase" />
+		</div>
+	</div>
+	<div id="step2b" class="hidden flex flex-col mt-4 justify-center">
+		<span class="text-center">Step 2: Ora inserisci questo codice sul secondo dispositvo.</span>
+		<div class="flex mt-4 items-center justify-center">
+			<span class="font-bold mr-1 p-2 rounded bg-green-600 text-xl" id="code">000000000</span>
+		</div>
+	</div>
+	<div id="answerScreen" class="hidden flex flex-col mt-4 justify-center items-center w-full">
+		<span class="text-center">Step 3: Gioca!</span>
+		<input id="answerButton" onclick="otherDevice.send({command: 'answer'})" type="button" value="Rispondi" class="m-8 w-52 aspect-square bg-red-600 rounded-full flex justify-center items-center text-xl font-bold uppercase disabled:opacity-20" disabled>
+		<div class=" mt-4 w-full flex">
+			<div class="flex-1 flex justify-start">
+				<input type="button" id="correctButton" onclick="otherDevice.send({command: 'answerCorrect'})" value="Corretto" class="w-fit p-1 bg-green-600 uppercase font-bold rounded disabled:opacity-20" disabled>
+			</div>
+			<span class="flex-1 text-sm uppercase font-bold flex flex-col items-center justify-center">Indovinate<span id="guessedCount" class="text-xl">??</span></span>
+			<div class="flex-1 flex justify-end">
+				<input type="button" id="wrongButton" onclick="otherDevice.send({command: 'answerWrong'})" value="Sbagliato" class="w-fit p-1 bg-red-600 uppercase font-bold rounded disabled:opacity-20" disabled>
+			</div>
+		</div>
+	</div>
+	<div id="questionScreen" class="hidden flex flex-col mt-4 justify-center items-center w-full">
+		<span class="text-center">Step 3: Gioca!</span>
+		<input id="startButton" type="button" value="Parti" onclick="resumeGame()" class="mt-4 p-2 font-bold bg-green-600 text-xl rounded uppercase">
+		<span class="mt-4 text-md font-bold uppercase opacity-40">La parola è</span>
+		<div id="word" class="p-4 rounded bg-green-600 text-xl font-bold w-fit uppercase">Caricamento...</div>
+		<div class="flex w-full mt-2">
+			<div class="flex-1 flex justify-start flex-col items-start">
+				<input id="skipButton" onclick="pauseGame('skip')" type="button" value="Passo" class="p-2 rounded bg-red-600 uppercase font-bold">
+				<span id="remainingSkipCount">3</span>
+			</div>
+			<span class="flex-1 text-sm uppercase font-bold flex flex-col items-center justify-center">Indovinate<span id="guessedCount" class="text-xl">??</span></span>
+			<span id="time" class="flex-1 text-lg font-bold flex items-center justify-end">??</span>
+		</div>
+	</div>
+	<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+	<script type="text/javascript">
+		let myPeerCode = String(Math.round(Math.random() * 1000000000)).padStart(9, "0")
+		let peerJSPrefix = 'cicapiamogame'
+		let myPeerId = peerJSPrefix + myPeerCode;
+		let mySelf = null;
+
+		let otherDeviceId = null;
+		let otherDevice = null;
+
+		let words = null;
+
+		let gameData = {}
+		let timeCountInterval = -1
+
+		function chooseAnswerDeviceType() {
+			document.querySelector('#step1').classList.add('hidden')
+			document.querySelector('#step2a').classList.remove('hidden')
+		}
+
+		function chooseQuestionDeviceType() {
+			if (getRandomWord() === false) {
+				alert('Words are still loading...');
+				return false;
+			}
+			document.querySelector('#step1').classList.add('hidden')
+			document.querySelector('#step2b').classList.remove('hidden')
+			document.querySelector('#step2b #code').innerText = myPeerCode
+		}
+
+		function getRandomWord() {
+			if (words == null)
+				return false;
+			return words.at(Math.floor(Math.random() * words.length))
+		}
+
+		function connectToQuestionDevice() {
+			let code = document.querySelector('#step2a #code').value
+			otherDeviceId = peerJSPrefix + code
+			otherDevice = mySelf.connect(otherDeviceId)
+			otherDevice.on('open', () => {
+				console.log('Connection completed')
+				document.querySelector('#step2a').classList.add('hidden')
+				document.querySelector('#answerScreen').classList.remove('hidden')
+				otherDevice.on('data', (data) => {
+					if (data.status === 'stop' || data.status === 'paused-skip' || data.status === 'paused') {
+						document.querySelector('#answerScreen #wrongButton').setAttribute('disabled', '1')
+						document.querySelector('#answerScreen #correctButton').setAttribute('disabled', '1')
+						document.querySelector('#answerScreen #answerButton').setAttribute('disabled', '1')
+					} else if (data.status === 'ingame') {
+						document.querySelector('#answerScreen #wrongButton').setAttribute('disabled', '1')
+						document.querySelector('#answerScreen #correctButton').setAttribute('disabled', '1')
+						document.querySelector('#answerScreen #answerButton').removeAttribute('disabled')
+					} else if (data.status === 'paused-answer') {
+						document.querySelector('#answerScreen #wrongButton').removeAttribute('disabled')
+						document.querySelector('#answerScreen #correctButton').removeAttribute('disabled')
+						document.querySelector('#answerScreen #answerButton').setAttribute('disabled', '1')
+					}
+					document.querySelector('#answerScreen #guessedCount').innerText = data.guessed
+				})
+			})
+			otherDevice.on('error', (error) => location.reload())
+			otherDevice.on('close', () => location.reload())
+			console.log(otherDevice)
+		}
+
+		function onConnectionFromAnswerDevice(conn) {
+			otherDevice = conn
+			otherDeviceId = conn.peer
+			otherDevice.on('close', () => {
+				console.log('Device disconnected')
+				location.reload()
+			})
+			otherDevice.on('data', (data) => {
+				if ('command' in data) {
+					if (data.command === 'answer') {
+						pauseGame('answer')
+					} else if (data.command === 'answerCorrect') {
+						gameData.guessed += 1
+						document.querySelector('#questionScreen #startButton').classList.remove('hidden')
+						pauseGame('none')
+					} else if (data.command === 'answerWrong') {
+						if (gameData.guessed > 0) {
+							gameData.guessed -= 1
+						}
+						document.querySelector('#questionScreen #startButton').classList.remove('hidden')
+						pauseGame('none')
+					}
+					document.querySelector('#questionScreen #guessedCount').innerText = gameData.guessed
+					sendGameDataToAnswerDevice()
+				}
+			})
+
+			questionDeviceReset()
+
+			document.querySelector('#step2b').classList.add('hidden')
+			document.querySelector('#questionScreen').classList.remove('hidden')
+		}
+
+		function questionDeviceReset() {
+			gameData = {
+				time: 60,
+				skip: 3,
+				guessed: 0,
+				currentWord: '',
+				status: 'stop',
+			}
+			document.querySelector('#questionScreen #startButton').classList.remove('hidden')
+			document.querySelector('#questionScreen #skipButton').setAttribute('disabled', '1')
+			document.querySelector('#questionScreen #guessedCount').innerText = gameData.guessed
+			document.querySelector('#questionScreen #time').innerText = gameData.time
+			document.querySelector('#questionScreen #remainingSkipCount').innerText = gameData.skip
+			sendGameDataToAnswerDevice()
+		}
+
+		function resumeGame() {
+
+			gameData.status = 'ingame'
+			gameData.currentWord = getRandomWord()
+
+			document.querySelector('#questionScreen #startButton').classList.add('hidden')
+			document.querySelector('#questionScreen #skipButton').removeAttribute('disabled')
+			document.querySelector('#questionScreen #guessedCount').innerText = gameData.guessed
+			document.querySelector('#questionScreen #time').innerText = gameData.time
+			document.querySelector('#questionScreen #remainingSkipCount').innerText = gameData.skip
+			document.querySelector('#questionScreen #word').innerText = gameData.currentWord
+
+
+			sendGameDataToAnswerDevice()
+			timeCountInterval = setInterval(() => {
+				if (gameData.time > 0) {
+					gameData.time -= 1;
+				} else {
+					pauseGame('finished')
+				}
+				sendGameDataToAnswerDevice()
+				document.querySelector('#questionScreen #time').innerText = gameData.time
+			}, 1000)
+		}
+
+		function pauseGame(cause) {
+			clearInterval(timeCountInterval)
+			document.querySelector('#questionScreen #skipButton').setAttribute('disabled', '1')
+			if (cause === 'skip') {
+				gameData.status = 'paused-skip'
+				if (gameData.skip > 0) {
+					gameData.skip -= 1;
+				} else if (gameData.guessed > 0) {
+					gameData.guessed -= 1
+				}
+
+				document.querySelector('#questionScreen #startButton').classList.remove('hidden')
+				document.querySelector('#questionScreen #remainingSkipCount').innerText = gameData.skip
+				document.querySelector('#questionScreen #guessedCount').innerText = gameData.guessed
+			} else if (cause === 'answer') {
+				gameData.status = 'paused-answer'
+			} else if (cause === 'finished') {
+				let guessed = gameData.guessed
+				questionDeviceReset()
+				alert('Parole Indovinate: ' + guessed)
+				gameData.status = 'stop'
+			} else if (cause === 'none') {
+				gameData.status = 'paused'
+			}
+			sendGameDataToAnswerDevice()
+		}
+
+		function sendGameDataToAnswerDevice() {
+			gameDataToSend = JSON.parse(JSON.stringify(gameData))
+			gameDataToSend.currentWord = ''
+			otherDevice.send(gameDataToSend)
+		}
+
+		document.addEventListener('DOMContentLoaded', () => {
+			fetch('1000_parole_italiane_comuni.json').then(res => res.json()).then((jsonR) => words = jsonR)
+			mySelf = new Peer(myPeerId, {debug: 3});
+			mySelf.on('error', (err) => {
+				console.log(JSON.stringify(err))
+				if (otherDevice !== null) {
+					otherDeviceId = null;
+					otherDevice = null;
+					alert('Questo id non esiste!')
+				}
+			})
+			mySelf.on('open', () => {
+				document.querySelector('#step0').classList.add('hidden')
+				document.querySelector('#step1').classList.remove('hidden')
+			})
+			mySelf.on('connection', (conn) => {
+				onConnectionFromAnswerDevice(conn)
+			})
+		})
+
+		document.addEventListener('DOMContentLoaded', () => {
+			setTimeout(() => {
+				window.addEventListener('beforeunload', (event) => {
+					window.scrollTo(0,0);
+  					event.preventDefault();
+  					event.returnValue = '';
+				});
+			}, 1000);
+		})
+	</script>
+</body>
+</html>
