@@ -234,7 +234,7 @@
 
 		document.addEventListener('DOMContentLoaded', () => {
 			fetch('1000_parole_italiane_comuni.json').then(res => res.json()).then((jsonR) => words = jsonR)
-			mySelf = new Peer(myPeerId, {debug: 3});
+			mySelf = new Peer(myPeerId, {debug: 3, config: {iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:["turn:eu-0.turn.peerjs.com:3478","turn:us-0.turn.peerjs.com:3478"],username:"peerjs",credential:"peerjsp"}],sdpSemantics:"unified-plan"}});
 			mySelf.on('error', (err) => {
 				console.log(JSON.stringify(err))
 				if (otherDevice !== null) {
